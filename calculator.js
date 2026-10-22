@@ -8,7 +8,7 @@
     name: 'Suporte de mesa', simulation: true, selling: false, quantity: 1,
     hours: 4, minutes: 0,
     materials: [{name: 'PLA · exemplo', price: 100, shipping: 0, discount: 0, spool: 1000, grams: 100}],
-    energyEnabled: true, watts: 120, tariff: 1,
+    energyEnabled: true, energyMode: 'power', measuredKwh: 0, watts: 120, tariff: 1,
     machineEnabled: true, printer: 2500, residual: 0, lifetime: 5000, maintenance: 0.10,
     overheadEnabled: false, monthly: 0, monthlyHours: 100,
     laborEnabled: false, prepMinutes: 0, finishMinutes: 0, hourly: 0,
@@ -49,7 +49,9 @@
       materials.push({name:String(m.name||`Filamento ${i+1}`).slice(0,100),grams,spool,unit:(price+shipping-discount)/(spool||1),cost:(price+shipping-discount)/(spool||1)*grams});
     });
     const material=materials.reduce((s,m)=>s+m.cost,0);
-    const kwh=input.energyEnabled?n('watts','Potência média',0,100000)/1000*duration:0;
+    const energyMode=input.energyMode||'power';
+    if(input.energyEnabled&&!['power','measured'].includes(energyMode)) errors.energyMode='Escolha a forma de calcular a energia.';
+    const kwh=input.energyEnabled?(energyMode==='measured'?n('measuredKwh','Energia medida',0,1e7):n('watts','Potência média',0,100000)/1000*duration):0;
     const energy=input.energyEnabled?kwh*n('tariff','Tarifa de energia',0,100):0;
     let depreciation=0, maintenance=0, overhead=0, labor=0;
     if(input.machineEnabled) {
@@ -83,12 +85,13 @@
   function restore(raw) {
     if(!raw || typeof raw!=='object' || Array.isArray(raw)) throw new Error('Formato de orçamento inválido.');
     const base=defaults();
-    const groups={energyEnabled:['watts','tariff'],machineEnabled:['printer','residual','lifetime','maintenance'],laborEnabled:['prepMinutes','finishMinutes','hourly'],overheadEnabled:['monthly','monthlyHours'],selling:['margin','fees','tax','fixedFee']};
+    const groups={energyEnabled:['watts','tariff','measuredKwh'],machineEnabled:['printer','residual','lifetime','maintenance'],laborEnabled:['prepMinutes','finishMinutes','hourly'],overheadEnabled:['monthly','monthlyHours'],selling:['margin','fees','tax','fixedFee']};
     const inactive=new Set(Object.entries(groups).filter(([flag])=>raw[flag]===false).flatMap(([,keys])=>keys));
     for(const key of Object.keys(base)) {
       if(key==='materials') continue;
       if(typeof base[key]==='boolean') {if(typeof raw[key]!=='boolean') throw new Error('Opção ausente ou inválida: '+key); base[key]=raw[key];}
-      else if(typeof base[key]==='string') base[key]=String(raw[key]||'Minha impressão').slice(0,100);
+      else if(typeof base[key]==='string') base[key]=String(raw[key]||(key==='energyMode'?'power':'Minha impressão')).slice(0,100);
+      else if(key==='measuredKwh'&&raw[key]===undefined) base[key]=0;
       else { const v=number(raw[key]); if(!Number.isFinite(v)||v<0||v>1e9) {if(inactive.has(key))continue;throw new Error('Campo inválido: '+key);} base[key]=v; }
     }
     if(!Array.isArray(raw.materials) || raw.materials.length<1 || raw.materials.length>20) throw new Error('Lista de filamentos inválida.');
@@ -125,5 +128,6 @@
     const mins=Math.ceil(seconds/60);
     return {grams,hours:Math.floor(mins/60),minutes:mins%60};
   }
-  return {defaults,number,calculate,restore,parseGcode};
+  const empty=()=>({...defaults(),name:'Minha impressão',simulation:false,hours:'',materials:[{name:'Meu filamento',price:'',shipping:0,discount:0,spool:1000,grams:''}],energyEnabled:false,machineEnabled:false,reserve:0});
+  return {defaults,empty,number,calculate,restore,parseGcode};
 });

@@ -6,7 +6,7 @@ Calculadora em português para entender os custos de impressão por filamento (F
 
 1. Baixe e extraia a pasta completa do projeto.
 2. Abra `index.html` no Chrome, Edge ou Firefox.
-3. Comece pelo exemplo e substitua os valores pelos seus. Todos os valores iniciais são fictícios, não recomendações de compra, de potência, de tarifa ou de vida útil.
+3. Preencha tempo, preço do rolo e consumo em gramas. A primeira abertura começa vazia. O botão **Usar exemplo** é opcional; seus valores são fictícios, não recomendações. Energia e outros custos ficam recolhidos e só entram quando ativados. O resultado lista as categorias não incluídas.
 4. Use **Salvar orçamento** para guardar no navegador e **Baixar dados** para criar uma cópia em JSON.
 
 Não abra o HTML dentro do ZIP: extraia todos os arquivos primeiro. Nenhuma biblioteca, conta, API, serviço de inteligência artificial ou conexão externa é necessária para calcular. Pelo endereço de um site ou servidor local, o armazenamento e a cópia de texto são mais previsíveis do que em `file://`.
@@ -15,7 +15,9 @@ Não abra o HTML dentro do ZIP: extraia todos os arquivos primeiro. Nenhuma bibl
 
 - Preço do rolo, peso líquido, frete, desconto e consumo em gramas; vários materiais com custos diferentes.
 - Horas e minutos de impressão; quantidade do trabalho e custo médio por peça.
-- Energia por potência média e tarifa em R$/kWh.
+- Energia por potência média e tarifa em R$/kWh, ou diretamente pelo consumo medido em kWh.
+- Cadastro local de até 30 filamentos, com preço, peso do rolo, frete e desconto. Salvar pelo mesmo nome atualiza o cadastro; carregar um filamento mantém o consumo do trabalho atual.
+- Tema escuro, formulário direto, sem página promocional; custos avançados recolhidos e botão **Novo cálculo**.
 - Desgaste da impressora, valor residual e reserva de manutenção por hora.
 - Tempo ativo de preparação, modelagem e acabamento, com valor da hora.
 - Rateio opcional dos custos fixos por horas produtivas mensais.
@@ -42,7 +44,7 @@ Sem impressora, mantenha **Estou simulando** marcado. Compare cenários, depois 
 | Item | Cálculo |
 | --- | --- |
 | Material | `(preço + frete − desconto) / peso líquido do rolo × consumo em g`, somado para cada material |
-| Energia | `W médios / 1000 × horas × R$/kWh` |
+| Energia | `W médios / 1000 × horas × R$/kWh`, ou `kWh medidos × R$/kWh` |
 | Desgaste | `(valor da máquina − revenda estimada) / vida útil em horas × horas do trabalho` |
 | Manutenção | `reserva em R$/h × horas` |
 | Fixos | `custos mensais / horas produtivas mensais × horas` |
@@ -68,7 +70,7 @@ Não lê STL, 3MF, `.gcode.3mf`, G-code binário, comprimento convertido em mass
 
 O aplicativo não envia valores, arquivos ou orçamentos para servidores e não inclui rastreadores, fontes remotas ou scripts de terceiros. O provedor de hospedagem pode registrar acessos HTTP ao site, independentemente do aplicativo. Os dados do navegador pertencem ao endereço/origem: um arquivo local e o GitHub Pages não compartilham o mesmo armazenamento.
 
-`localStorage` pode ser bloqueado, apagado pela limpeza do navegador ou perdido no modo privado. Há aviso quando a gravação falha. O rascunho só é gravado quando o cálculo é válido. O JSON guarda apenas o orçamento aberto; para preservar todos, exporte cada um. **Não envie seus JSON pessoais ao repositório público.** Importações são validadas e não executam conteúdo. Campos incompletos de grupos desativados voltam aos valores de exemplo desse grupo ao normalizar um arquivo salvo; revise antes de reativá-los.
+`localStorage` pode ser bloqueado, apagado pela limpeza do navegador ou perdido no modo privado. Há aviso quando a gravação falha. O rascunho só é gravado quando o cálculo é válido. O cadastro de filamentos também fica neste navegador. O JSON guarda apenas o orçamento aberto e os filamentos usados nele, não toda a biblioteca; para preservar todos, exporte cada um. **Não envie seus JSON pessoais ao repositório público.** Importações são validadas e não executam conteúdo. Campos incompletos de grupos desativados voltam aos valores de exemplo desse grupo ao normalizar um arquivo salvo; revise antes de reativá-los.
 
 ## Publicar no GitHub e abrir como site
 

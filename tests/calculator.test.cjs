@@ -92,3 +92,14 @@ test('Orca com tempo total na mesma linha e dois-pontos',()=>{
 test('peso total não esconde dados de vários filamentos',()=>{
   assert.throws(()=>C.parseGcode('; total filament used [g] = 10\n; filament used [g] = 3,7\n; estimated printing time (normal mode) = 1h'));
 });
+test('energia medida usa kWh reais em vez da potência estimada',()=>{
+  const s={...base(),energyEnabled:true,energyMode:'measured',measuredKwh:.75,tariff:1.2,watts:9999};const r=C.calculate(s);near(r.kwh,.75);near(r.energy,.9);
+});
+test('energia medida inválida e modo desconhecido são bloqueados',()=>{
+  assert.equal(C.calculate({...base(),energyEnabled:true,energyMode:'measured',measuredKwh:-1}).ok,false);
+  assert.equal(C.calculate({...base(),energyEnabled:true,energyMode:'other'}).ok,false);
+});
+test('backup antigo ganha os novos campos de energia sem alterar o custo',()=>{
+  const s=C.defaults();delete s.energyMode;delete s.measuredKwh;const restored=C.restore(s);assert.equal(restored.energyMode,'power');near(C.calculate(restored).total,14.168);
+});
+test('novo cálculo não apresenta um total enquanto faltarem valores essenciais',()=>assert.equal(C.calculate(C.empty()).ok,false));

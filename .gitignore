@@ -5,4 +5,5 @@ Thumbs.db
 .env
 .env.*
 camada-orcamento-*.json
+camada-backup-*.json
 work/

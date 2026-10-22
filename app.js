@@ -13,7 +13,7 @@
     const draft=localStorage.getItem(KEY);
     if(draft) state=Camada.restore(JSON.parse(draft));
     const saved=JSON.parse(localStorage.getItem(HISTORY)||'[]');
-    if(Array.isArray(saved)) history=saved.slice(0,20).flatMap(x=>{try{return [{id:String(x.id),date:String(x.date),data:Camada.restore(x.data)}];}catch{return [];}});
+    if(Array.isArray(saved)) history=saved.slice(0,500).flatMap(x=>{try{return [{id:String(x.id),date:String(x.date),data:Camada.restore(x.data)}];}catch{return [];}});
     const materials=JSON.parse(localStorage.getItem('camada-v1-filaments')||'[]');
     if(Array.isArray(materials))catalog=materials.slice(0,30).flatMap(m=>{try{const s=Camada.defaults();s.materials=[{...m,grams:1}];return [Camada.restore(s).materials[0]];}catch{return [];}});
   } catch {setTimeout(()=>toast('Um dado salvo não pôde ser lido. O exemplo foi carregado; seus arquivos exportados continuam disponíveis.'),200);}
@@ -50,7 +50,7 @@
     document.querySelectorAll('.field-error').forEach(el=>el.remove());
     $('error-summary').hidden=result.ok||!touched;
     $('result-body').hidden=!result.ok;
-    for(const id of ['save','print','export','copy']) $(id).disabled=!result.ok;
+    for(const id of ['save','print','export','copy','record-sale']) $(id).disabled=!result.ok;
     if(!result.ok){
       $('total').textContent='—';$('per-unit').textContent=touched?'Confira os campos destacados para calcular.':'Preencha tempo, preço do rolo e gramas usadas.';
       const messages=Object.entries(result.errors);
@@ -102,13 +102,14 @@
   }
   $('save').addEventListener('click',()=>{
     if(!result.ok)return;
-    if(history.length>=20){toast('Você já tem 20 orçamentos. Baixe uma cópia e exclua um salvo para liberar espaço.');return;}
+    if(history.length>=500){toast('Limite de 500 orçamentos. Faça um backup completo antes de liberar espaço.');return;}
     const item={id:Date.now().toString(36),date:new Date().toISOString(),data:Camada.restore(state)};
     const next=[item,...history];if(persist(HISTORY,next)){history=next;renderHistory();toast('Orçamento salvo neste navegador.');}
   });
   $('history-list').addEventListener('click',e=>{
+    const sell=e.target.closest('[data-sell]');if(sell){const item=history[Number(sell.dataset.sell)];window.dispatchEvent(new CustomEvent('camada-sale',{detail:{quote:Camada.restore(item.data),sourceId:item.id}}));return;}
     const open=e.target.closest('[data-open]'),remove=e.target.closest('[data-delete]');
-    if(open){if(!confirm('Abrir este orçamento e substituir o rascunho atual?'))return;state=Camada.restore(history[Number(open.dataset.open)].data);fill();$('calculator').scrollIntoView({behavior:'smooth'});toast('Orçamento carregado.');}
+    if(open){if(!confirm('Abrir este orçamento e substituir o rascunho atual?'))return;state=Camada.restore(history[Number(open.dataset.open)].data);fill();window.dispatchEvent(new Event('camada-show-calculator'));$('calculator').scrollIntoView({behavior:'smooth'});toast('Orçamento carregado.');}
     if(remove){const index=Number(remove.dataset.delete);if(!confirm('Excluir este orçamento salvo do navegador? Faça uma cópia em “Baixar dados” se quiser guardá-lo.'))return;const next=history.filter((_,i)=>i!==index);if(persist(HISTORY,next)){history=next;renderHistory();toast('Orçamento excluído.');}}
   });
   function summary(){
@@ -134,7 +135,7 @@
       if(payload.app!=='camada'||payload.version!==1)throw new Error('Este arquivo não é um orçamento Camada compatível.');
       const next=Camada.restore(payload.data);
       if(!confirm('Importar o orçamento “'+next.name+'” e substituir o rascunho atual?'))return;
-      state=next;fill();toast('Dados importados. Confira os valores antes de usar.');$('calculator').scrollIntoView({behavior:'smooth'});
+      state=next;fill();window.dispatchEvent(new Event('camada-show-calculator'));toast('Dados importados. Confira os valores antes de usar.');$('calculator').scrollIntoView({behavior:'smooth'});
     }catch(error){toast(error instanceof SyntaxError?'O arquivo não contém JSON válido. Nada foi alterado.':error.message);}
   });
   $('gcode-button').addEventListener('click',()=>$('gcode-file').click());
@@ -152,5 +153,22 @@
   });
   $('gcode-apply').addEventListener('click',()=>{if(!pendingGcode)return;if(state.materials.length!==1){toast('A lista de filamentos mudou. Importe novamente ou preencha manualmente.');return;}state.materials[0].grams=pendingGcode.grams;state.hours=pendingGcode.hours;state.minutes=pendingGcode.minutes;pendingGcode=null;$('gcode-preview').hidden=true;fill();toast('Peso e tempo aplicados. Confira a quantidade de peças do trabalho.');});
   $('gcode-cancel').addEventListener('click',()=>{pendingGcode=null;$('gcode-preview').hidden=true;});
+  function annotateHistory(){
+    document.querySelectorAll('#history-list .history-item').forEach((el,i)=>{
+      const sold=window.CamadaLedger?.isSold(history[i].id);
+      const tag=document.createElement('span');tag.className='record-tag';tag.textContent=sold?'Vendido':'Orçamento';el.querySelector('h3').append(' ',tag);
+      const button=document.createElement('button');button.type='button';button.className='button small';button.dataset.sell=i;button.textContent=sold?'Venda registrada':'Registrar venda';button.disabled=!!sold;el.querySelector('.history-buttons').prepend(button);
+    });
+  }
+  const originalRenderHistory=renderHistory;
+  renderHistory=function(){originalRenderHistory();annotateHistory();};
+  window.addEventListener('camada-finance-change',renderHistory);
+  $('record-sale').addEventListener('click',()=>{if(result.ok)window.dispatchEvent(new CustomEvent('camada-sale',{detail:{quote:Camada.restore(state),sourceId:null}}));});
+  window.CamadaApp={
+    exportData:()=>({quotes:JSON.parse(JSON.stringify(history)),filaments:JSON.parse(JSON.stringify(catalog)),draft:result.ok?Camada.restore(state):null}),
+    loadQuote:data=>{state=Camada.restore(data);fill();},
+    usePrinter:value=>{state.printer=value;state.machineEnabled=true;fill();$('advanced-costs').open=true;toast('Valor da impressora aplicado. Confira vida útil e manutenção: ainda são as hipóteses do cálculo.');},
+    restoreData:data=>{history=data.quotes;catalog=data.filaments;state=data.draft||Camada.empty();fill();renderHistory();}
+  };
   fill();renderHistory();
 })();

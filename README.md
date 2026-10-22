@@ -1,6 +1,6 @@
 # Camada · Calculadora de impressão 3D
 
-Calculadora em português para entender os custos de impressão por filamento (FDM/FFF), feita para iniciantes, uso pessoal e renda extra. A venda é opcional. Não pressupõe empresa, CNPJ ou regime tributário.
+Calculadora em português para entender os custos de impressão por filamento (FDM/FFF), feita para iniciantes, uso pessoal e renda extra. A venda é opcional. FEITO COM AJUDA DE IA.
 
 ## Abrir sem instalar nada
 

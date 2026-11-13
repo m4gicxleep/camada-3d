@@ -7,7 +7,11 @@
   function message(s){$('toast').textContent=s;$('toast').hidden=false;clearTimeout(message.timer);message.timer=setTimeout(()=>$('toast').hidden=true,7000);}
   function error(id,s){$(id).textContent=s;$(id).hidden=!s;}
   function field(id,label,value='',type='text',help=''){return `<div class="field"><label for="${id}">${label}</label><input id="${id}" ${type==='text'?'inputmode="decimal"':`type="${type}"`} value="${esc(value)}" required>${help?`<small>${help}</small>`:''}</div>`;}
-  const button=document.createElement('button');button.type='button';button.dataset.panel='operations';button.textContent='Estoque e produção';button.addEventListener('click',()=>CamadaLedger.showPanel('operations'));document.querySelector('.tabs').append(button);
+  const button=document.createElement('button');button.type='button';button.dataset.panel='operations';button.textContent='Estoque e produção';button.addEventListener('click',()=>{
+    for(const name of ['calculator','records','finance','operations'])$('panel-'+name).hidden=name!=='operations';
+    document.querySelectorAll('[data-panel]').forEach(tab=>{tab.classList.toggle('active',tab===button);if(tab===button)tab.setAttribute('aria-current','page');else tab.removeAttribute('aria-current');});
+    document.querySelector('.mobile-jump').hidden=true;
+  });document.querySelector('.tabs').append(button);
   const panel=document.createElement('section');panel.id='panel-operations';panel.hidden=true;panel.innerHTML=`
     <div class="workspace-head"><div><h2>Estoque por rolo e cor</h2><p class="muted">O orçamento não baixa estoque. O consumo sai somente ao registrar a produção.</p></div><button id="new-roll" class="button primary" type="button">+ Cadastrar rolo</button></div>
     <div id="stock-metrics" class="metrics"></div><p class="help-line">Cadastre cada rolo separadamente, mesmo que tenha a mesma cor. O custo inclui preço + frete − desconto. A compra paga deve ser registrada também em despesas; cadastrar estoque não movimenta o caixa.</p>
@@ -80,3 +84,4 @@
   window.addEventListener('camada-materials-render',rollSelectors);window.addEventListener('camada-ledger-render',render);$('sales-month').addEventListener('change',render);$('show-cancelled-sales').addEventListener('change',render);
   render();
 })();
+

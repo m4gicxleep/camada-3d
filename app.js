@@ -19,11 +19,11 @@
   } catch {setTimeout(()=>toast('Um dado salvo não pôde ser lido. O exemplo foi carregado; seus arquivos exportados continuam disponíveis.'),200);}
   function materialField(i,key,label,unit,help=''){
     const id=`material-${i}-${key}`;
-    return `<div class="field${key==='name'?' wide':''}"><label for="${id}">${label}</label><div class="input-wrap"><input id="${id}" data-material="${i}" data-key="${key}" value="${escape(state.materials[i][key])}" ${key==='name'?'maxlength="100"':'inputmode="decimal"'}>${unit?`<span>${unit}</span>`:''}</div>${help?`<small>${help}</small>`:''}</div>`;
+    return `<div class="field${key==='name'?' wide':''}"><label for="${id}">${label}</label><div class="input-wrap"><input id="${id}" data-material="${i}" data-key="${key}" value="${escape(state.materials[i][key]??0)}" ${key==='name'?'maxlength="100"':'inputmode="decimal"'}>${unit?`<span>${unit}</span>`:''}</div>${help?`<small>${help}</small>`:''}</div>`;
   }
   function renderMaterials(){
-    $('materials').innerHTML=state.materials.map((m,i)=>`<div class="material"><div class="material-head"><span>FILAMENTO ${i+1}</span>${state.materials.length>1?`<button class="button subtle small" type="button" data-remove="${i}" aria-label="Remover filamento ${i+1}">Remover</button>`:''}</div><div class="material-tools"><select data-catalog="${i}" aria-label="Usar filamento salvo ${i+1}"><option value="">Usar filamento salvo…</option>${catalog.map((item,j)=>`<option value="${j}">${escape(item.name)} · ${money((item.price+item.shipping-item.discount)/item.spool*1000)}/kg</option>`).join('')}</select><button class="button small" type="button" data-save-material="${i}">Salvar filamento</button></div><div class="fields">${materialField(i,'name','Nome / tipo do filamento','')}${materialField(i,'price','Preço do rolo','R$','Se já inclui desconto, deixe o campo desconto em zero.')}${materialField(i,'spool','Peso líquido do rolo','g','1 kg = 1000 g. Não use ponto de milhar.')}${materialField(i,'grams','Gramas usadas no trabalho','g','Total do fatiador, incluindo suportes e purga.')}${materialField(i,'shipping','Frete deste rolo','R$')}${materialField(i,'discount','Desconto deste rolo','R$')}</div><p class="material-unit" id="material-unit-${i}"></p></div>`).join('');
-    $('add-material').disabled=state.materials.length>=20;
+    $('materials').innerHTML=state.materials.map((m,i)=>`<div class="material"><div class="material-head"><span>FILAMENTO ${i+1}</span>${state.materials.length>1?`<button class="button subtle small" type="button" data-remove="${i}" aria-label="Remover filamento ${i+1}">Remover</button>`:''}</div><div class="material-tools"><select data-catalog="${i}" aria-label="Usar filamento salvo ${i+1}"><option value="">Usar filamento salvo…</option>${catalog.map((item,j)=>`<option value="${j}">${escape(item.name)} · ${money((item.price+item.shipping-item.discount)/item.spool*1000)}/kg</option>`).join('')}</select><button class="button small" type="button" data-save-material="${i}">Salvar filamento</button></div><div class="fields">${materialField(i,'name','Nome / tipo do filamento','')}${materialField(i,'price','Preço do rolo','R$','Se já inclui desconto, deixe o campo desconto em zero.')}${materialField(i,'spool','Peso líquido do rolo','g','1 kg = 1000 g. Não use ponto de milhar.')}${materialField(i,'grams','Gramas usadas no trabalho','g','Total do fatiador, incluindo suportes e purga.')}${materialField(i,'waste','Perdas adicionais fora do fatiador','g','Só o que ainda não está nas gramas acima: purga manual, teste de cor etc.')}${materialField(i,'shipping','Frete deste rolo','R$')}${materialField(i,'discount','Desconto deste rolo','R$')}</div><p class="material-unit" id="material-unit-${i}"></p></div>`).join('');
+    $('add-material').disabled=state.materials.length>=20;window.dispatchEvent(new Event('camada-materials-render'));
   }
   function fill(){
     pendingGcode=null;$('gcode-preview').hidden=true;
@@ -32,7 +32,7 @@
   }
   const colors=['#d9edaa','#a5c17f','#82a68b','#dbc994','#b7bbcd','#a8c6cb','#b2b79d','#e7b196','#9fbb88','#c2caca'];
   const breakdown=r=>[
-    ['Filamento',r.material],['Energia elétrica',r.energy],['Desgaste da impressora',r.depreciation],['Manutenção',r.maintenance],['Custos fixos',r.overhead],['Reserva para falhas',r.reserve],['Seu trabalho',r.labor],['Outros insumos',r.extra],['Embalagem',r.packaging],['Frete de entrega',r.delivery]
+    ['Filamento',r.material],['Energia elétrica',r.energy],['Desgaste da impressora',r.depreciation],['Manutenção',r.maintenance],['Custos fixos',r.overhead],['Reserva para falhas',r.reserve],['Reserva para cor específica',r.colorReserve],['Seu trabalho',r.labor],['Outros insumos',r.extra],['Embalagem',r.packaging],['Frete de entrega',r.delivery]
   ];
   function row(label,value,color){return `<div class="cost-row"><dt>${color?`<i class="cost-dot" style="background:${color}"></i>`:''}${escape(label)}</dt><dd>${money(value)}</dd></div>`;}
   function update(){
@@ -50,7 +50,7 @@
     document.querySelectorAll('.field-error').forEach(el=>el.remove());
     $('error-summary').hidden=result.ok||!touched;
     $('result-body').hidden=!result.ok;
-    for(const id of ['save','print','export','copy','record-sale']) $(id).disabled=!result.ok;
+    for(const id of ['save','print','export','copy','record-sale','customer-copy']) $(id).disabled=!result.ok;
     if(!result.ok){
       $('total').textContent='—';$('per-unit').textContent=touched?'Confira os campos destacados para calcular.':'Preencha tempo, preço do rolo e gramas usadas.';
       const messages=Object.entries(result.errors);
@@ -71,7 +71,7 @@
     const rows=breakdown(result);
     $('breakdown').innerHTML=rows.filter(([,v])=>v>0).map(([label,value])=>row(label,value,colors[rows.findIndex(x=>x[0]===label)])).join('')||row('Nenhum custo informado',0);
     $('stack-bar').innerHTML=rows.map(([,v],i)=>`<span style="width:${result.total?v/result.total*100:0}%;background:${colors[i]}"></span>`).join('');
-    result.materials.forEach((m,i)=>{$('material-unit-'+i).textContent=`${money(m.unit*1000)} / kg · ${money(m.cost)} neste trabalho${m.grams>m.spool?' · Atenção: consumo maior que um rolo; verifique o estoque.':''}`;});
+    result.materials.forEach((m,i)=>{$('material-unit-'+i).textContent=`${money(m.unit*1000)} / kg · ${fmt(m.grams+m.waste,3)} g no total · ${money(m.cost)} neste trabalho${m.grams>m.spool?' · Atenção: consumo maior que um rolo; verifique o estoque.':''}`;});
     $('sale-result').hidden=!state.selling;
     if(state.selling){
       $('sale-price').textContent=money(result.price);
@@ -89,11 +89,11 @@
   });
   $('materials').addEventListener('click',e=>{const button=e.target.closest('[data-remove]');if(button){state.materials.splice(Number(button.dataset.remove),1);renderMaterials();update();}
     const save=e.target.closest('[data-save-material]');if(save){
-      const m=state.materials[Number(save.dataset.saveMaterial)],s=Camada.defaults();s.materials=[{...m,grams:1}];
-      try{const item=Camada.restore(s).materials[0];const next=catalog.filter(x=>x.name!==item.name);if(next.length>=30){toast('Limite de 30 filamentos salvos. Use o mesmo nome para atualizar um existente.');return;}next.push(item);if(persist('camada-v1-filaments',next)){catalog=next;renderMaterials();update();toast('Filamento salvo pelo nome. Use o seletor para reutilizar o preço; o consumo é preenchido a cada trabalho.');}}catch{toast('Preencha preço, peso do rolo, frete e desconto válidos antes de salvar o filamento.');}
+      const m=state.materials[Number(save.dataset.saveMaterial)],s=Camada.defaults();s.materials=[{...m,grams:1,waste:0}];
+      try{const item=Camada.restore(s).materials[0];delete item.rollId;const next=catalog.filter(x=>x.name!==item.name);if(next.length>=30){toast('Limite de 30 filamentos salvos. Use o mesmo nome para atualizar um existente.');return;}next.push(item);if(persist('camada-v1-filaments',next)){catalog=next;renderMaterials();update();toast('Filamento salvo pelo nome. Use o seletor para reutilizar o preço; o consumo é preenchido a cada trabalho.');}}catch{toast('Preencha preço, peso do rolo, frete e desconto válidos antes de salvar o filamento.');}
     }
   });
-  $('materials').addEventListener('change',e=>{if(e.target.dataset.catalog===undefined||e.target.value==='')return;const i=Number(e.target.dataset.catalog),m=catalog[Number(e.target.value)];state.materials[i]={...m,grams:state.materials[i].grams};renderMaterials();update();toast('Filamento carregado. Confira o consumo deste trabalho.');});
+  $('materials').addEventListener('change',e=>{if(e.target.dataset.catalog===undefined||e.target.value==='')return;const i=Number(e.target.dataset.catalog),m=catalog[Number(e.target.value)];state.materials[i]={...m,waste:state.materials[i].waste||0,grams:state.materials[i].grams};delete state.materials[i].rollId;renderMaterials();update();toast('Filamento carregado. Confira o consumo deste trabalho.');});
   $('add-material').addEventListener('click',()=>{if(state.materials.length>=20)return;state.materials.push({name:'Novo filamento',price:0,shipping:0,discount:0,spool:1000,grams:1});renderMaterials();update();$(`material-${state.materials.length-1}-name`).focus();toast('Novo filamento adicionado. Informe o preço e o consumo reais.');});
   $('reset').addEventListener('click',()=>{if(!confirm('Carregar os dados de exemplo? O rascunho atual será substituído. Orçamentos salvos não serão alterados.'))return;state=Camada.defaults();pendingGcode=null;$('gcode-preview').hidden=true;fill();toast('Exemplo carregado. Todos os valores são apenas uma simulação.');});
   $('new').addEventListener('click',()=>{if(!confirm('Começar um cálculo vazio? O rascunho atual será substituído. Cálculos e filamentos salvos serão mantidos.'))return;state=Camada.empty();touched=false;try{localStorage.removeItem(KEY);}catch{}fill();$('name').focus();});
@@ -113,8 +113,9 @@
     if(remove){const index=Number(remove.dataset.delete);if(!confirm('Excluir este orçamento salvo do navegador? Faça uma cópia em “Baixar dados” se quiser guardá-lo.'))return;const next=history.filter((_,i)=>i!==index);if(persist(HISTORY,next)){history=next;renderHistory();toast('Orçamento excluído.');}}
   });
   function summary(){
-    return [`CAMADA · ${state.name||'Minha impressão'}`,state.simulation?'SIMULAÇÃO — valores de exemplo ou hipóteses':'ESTIMATIVA — baseada nos dados informados',`Quantidade: ${result.quantity} peça(s) | Tempo total: ${fmt(result.duration)} h`,...result.materials.map(m=>`${m.name}: ${fmt(m.grams,3)} g × ${money(m.unit*1000)}/kg`),'',...breakdown(result).map(([label,v])=>`${label}: ${money(v)}`),`CUSTO TOTAL: ${money(result.total)}`,`Custo médio por peça: ${money(result.unit)}`,...(state.selling?['',`VENDA DO PEDIDO: ${money(result.price)}`,`Taxas: ${money(result.fees)} | Impostos informados: ${money(result.taxes)}`,`Sobra após custos e taxas: ${money(result.profit)}`]:[]),'','Reserva para falhas é um acréscimo, não uma probabilidade. Desgaste e reservas são provisões. Valores estimados; não representam uma garantia de custo real.'].join('\n');
+    return [`CAMADA · ${state.name||'Minha impressão'}`,state.simulation?'SIMULAÇÃO — valores de exemplo ou hipóteses':'ESTIMATIVA — baseada nos dados informados',`Quantidade: ${result.quantity} peça(s) | Tempo total: ${fmt(result.duration)} h`,...result.materials.map(m=>`${m.name}: ${fmt(m.grams+m.waste,3)} g (com perdas extras) × ${money(m.unit*1000)}/kg`),'',...breakdown(result).map(([label,v])=>`${label}: ${money(v)}`),`CUSTO TOTAL: ${money(result.total)}`,`Custo médio por peça: ${money(result.unit)}`,...(state.selling?['',`VENDA DO PEDIDO: ${money(result.price)}`,`Taxas: ${money(result.fees)} | Impostos informados: ${money(result.taxes)}`,`Sobra após custos e taxas: ${money(result.profit)}`]:[]),'','Reserva para falhas é um acréscimo, não uma probabilidade. Desgaste e reservas são provisões. Valores estimados; não representam uma garantia de custo real.'].join('\n');
   }
+  $('customer-copy').addEventListener('click',async()=>{if(!result?.ok||!state.selling){toast('Ative o preço de venda e confira os valores para gerar o orçamento do cliente.');return;}const text=['ORÇAMENTO · '+state.name,'Quantidade: '+result.quantity+' peça(s)','Material / cor: '+state.materials.map(m=>m.name).join(', '),'Total do pedido: '+money(result.price),'Média por peça: '+money(result.price/result.quantity),'Entrega incluída no total: '+money(result.delivery),'Prazo, validade e forma de pagamento: a combinar.','Confirme material, cor e acabamento antes de produzir.'].join('\n');try{await navigator.clipboard.writeText(text);toast('Orçamento do cliente copiado. Revise prazo e condições antes de enviar.');}catch{toast('Cópia bloqueada pelo navegador.');}});
   $('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(summary());toast('Resumo copiado. Revise antes de compartilhar.');}catch{toast('O navegador bloqueou a cópia. Use “Imprimir / PDF” ou “Baixar dados”.');}});
   let printDetails=[];
   window.addEventListener('beforeprint',()=>{printDetails=[...document.querySelectorAll('details.advanced')].filter(el=>!el.open);printDetails.forEach(el=>el.open=true);});
@@ -144,14 +145,14 @@
     try{
       pendingGcode=null;$('gcode-preview').hidden=true;
       if(state.materials.length!==1)throw new Error('Use a entrada manual quando houver vários filamentos no orçamento.');
-      if(!/\.gcode$/i.test(file.name))throw new Error('Selecione um arquivo .gcode de texto.');
+      if(!/\.gcode(?:\.3mf)?$/i.test(file.name))throw new Error('Selecione .gcode ou .gcode.3mf de uma mesa já fatiada.');
       if(file.size>50*1024*1024)throw new Error('Limite de leitura: 50 MB. Para arquivos maiores, informe peso e tempo manualmente.');
-      pendingGcode=Camada.parseGcode(await file.text());
-      $('gcode-description').textContent=`Encontrado: ${fmt(pendingGcode.grams,3)} g e ${pendingGcode.hours} h ${pendingGcode.minutes} min (arredondado para cima ao minuto). Confira no fatiador, inclusive suportes, purga e aquecimento. Aplicar substitui somente o consumo do filamento e o tempo, sem alterar a quantidade de peças.`;
+      pendingGcode=Camada.parseGcode(await CamadaSlicer.read(file));
+      $('gcode-description').textContent=`Encontrado: ${fmt(pendingGcode.grams,3)} g e ${pendingGcode.hours} h ${pendingGcode.minutes} min (arredondado para cima ao minuto). Confira no fatiador, inclusive suportes, purga e aquecimento. Aplicar substitui o consumo e o tempo e zera perdas extras para evitar duplicação. Confira perdas externas e a quantidade de peças depois de aplicar.`;
       $('gcode-preview').hidden=false;
     }catch(error){toast(error.message);}
   });
-  $('gcode-apply').addEventListener('click',()=>{if(!pendingGcode)return;if(state.materials.length!==1){toast('A lista de filamentos mudou. Importe novamente ou preencha manualmente.');return;}state.materials[0].grams=pendingGcode.grams;state.hours=pendingGcode.hours;state.minutes=pendingGcode.minutes;pendingGcode=null;$('gcode-preview').hidden=true;fill();toast('Peso e tempo aplicados. Confira a quantidade de peças do trabalho.');});
+  $('gcode-apply').addEventListener('click',()=>{if(!pendingGcode)return;if(state.materials.length!==1){toast('A lista de filamentos mudou. Importe novamente ou preencha manualmente.');return;}state.materials[0].grams=pendingGcode.grams;state.materials[0].waste=0;state.hours=pendingGcode.hours;state.minutes=pendingGcode.minutes;pendingGcode=null;$('gcode-preview').hidden=true;fill();toast('Peso e tempo aplicados. Confira a quantidade de peças do trabalho.');});
   $('gcode-cancel').addEventListener('click',()=>{pendingGcode=null;$('gcode-preview').hidden=true;});
   function annotateHistory(){
     document.querySelectorAll('#history-list .history-item').forEach((el,i)=>{
@@ -165,6 +166,9 @@
   window.addEventListener('camada-finance-change',renderHistory);
   $('record-sale').addEventListener('click',()=>{if(result.ok)window.dispatchEvent(new CustomEvent('camada-sale',{detail:{quote:Camada.restore(state),sourceId:null}}));});
   window.CamadaApp={
+    getMaterials:()=>state.materials.map(m=>({...m})),
+    unlinkRoll:index=>{delete state.materials[index].rollId;renderMaterials();update();},
+    useRoll:(index,roll)=>{const old=state.materials[index];state.materials[index]={name:roll.name+' · '+roll.color,price:roll.price,shipping:roll.shipping,discount:roll.discount,spool:roll.spool,grams:old.grams,waste:old.waste||0,rollId:roll.id};fill();},
     exportData:()=>({quotes:JSON.parse(JSON.stringify(history)),filaments:JSON.parse(JSON.stringify(catalog)),draft:result.ok?Camada.restore(state):null}),
     loadQuote:data=>{state=Camada.restore(data);fill();},
     usePrinter:value=>{state.printer=value;state.machineEnabled=true;fill();$('advanced-costs').open=true;toast('Valor da impressora aplicado. Confira vida útil e manutenção: ainda são as hipóteses do cálculo.');},

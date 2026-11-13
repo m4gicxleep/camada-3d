@@ -15,3 +15,6 @@ jobs:
       - run: node --test tests/*.test.cjs
       - run: node --check app.js
       - run: node --check finance-ui.js
+      - run: node --check operations-ui.js
+      - run: node --check operations.js
+      - run: node --check slicer.js

@@ -7,6 +7,8 @@ http.createServer((req,res)=>{
   try{name=decodeURIComponent(new URL(req.url,'http://localhost').pathname);}catch{res.writeHead(400);return res.end();}
   if(name==='/')name='/index.html';
   const file=path.resolve(root,'.'+name),relative=path.relative(root,file);
+  const allowed=new Set(['index.html','styles.css','calculator.js','app.js','finance.js','finance-ui.js','operations.js','operations-ui.js','slicer.js','icon.svg','README.md']);
+  if(!allowed.has(relative)){res.writeHead(404);return res.end('Not found');}
   if(relative.startsWith('..')||path.isAbsolute(relative)||relative.split(/[\\/]/).some(x=>x.startsWith('.'))){res.writeHead(403);return res.end();}
   fs.readFile(file,(err,data)=>{if(err){res.writeHead(404);return res.end('Not found');}res.writeHead(200,{'Content-Type':types[path.extname(file)]||'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(data);});
 }).listen(4173,'127.0.0.1',()=>console.log('Camada: http://127.0.0.1:4173'));

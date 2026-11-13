@@ -1,7 +1,7 @@
-(function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory(require('./calculator.js'));else root.CamadaFinance=factory(root.Camada);})(globalThis,function(C){
+(function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory(require('./calculator.js'),require('./operations.js'));else root.CamadaFinance=factory(root.Camada,root.CamadaOps);})(globalThis,function(C,O){
   'use strict';
   const LIMIT=5000;
-  const empty=()=>({version:1,printer:null,sales:[],expenses:[],payments:[]});
+  const empty=()=>({version:1,printer:null,sales:[],expenses:[],payments:[],inventory:[],runs:[]});
   function fail(message){throw new Error(message);}
   function text(value,label,max=160){if(typeof value!=='string'||!value.trim()||value.length>max)fail(label+' inválido.');return value.trim();}
   function cents(value,label='Valor'){
@@ -27,9 +27,19 @@
     const q=C.restore(raw.quote),r=C.calculate(q);
     const s={id:text(raw.id,'Identificador'),sourceId:raw.sourceId===null?null:text(raw.sourceId,'Orçamento de origem'),quote:q,name:text(raw.name,'Nome da venda'),date:date(raw.date,'Data da venda'),gross:integer(raw.gross,'Valor da venda',1),fees:integer(raw.fees,'Taxas'),receivedDate:raw.receivedDate===null?null:date(raw.receivedDate,'Data de recebimento'),cancelled:raw.cancelled===true};
     if(typeof raw.cancelled!=='boolean')fail('Situação da venda inválida.');
+    if(s.receivedDate&&s.receivedDate<s.date)fail('O recebimento não pode ser anterior à venda.');
     if(s.fees>s.gross)fail('As taxas não podem superar o valor recebido pela venda.');
     // Freeze the normalized quote in the record; later edits to a quote never alter old sales.
-    s.cost=raw.cost===undefined?Math.round(r.total*100):integer(raw.cost,'Custo guardado da venda');return s;
+    s.cost=raw.cost===undefined?Math.round(r.total*100):integer(raw.cost,'Custo guardado da venda');
+    if(raw.receipts!==undefined){
+      if(!Array.isArray(raw.receipts)||raw.receipts.length>120)fail('Recebimentos inválidos.');
+      s.receipts=raw.receipts.map(p=>({id:text(p.id,'Recebimento'),date:date(p.date,'Data do recebimento'),amount:integer(p.amount,'Recebimento',1),fee:integer(p.fee,'Taxa do recebimento')}));
+      if(new Set(s.receipts.map(p=>p.id)).size!==s.receipts.length)fail('Recebimentos repetidos.');
+      if(s.receivedDate&&s.receipts.length)fail('Use recebimento integral ou sinal e saldo.');
+      let total=0,fee=0;for(const p of s.receipts){if(p.date<s.date||p.fee>p.amount)fail('Confira a data e a taxa de cada recebimento.');total+=p.amount;fee+=p.fee;}
+      if(total>s.gross||fee>s.fees||(total===s.gross&&fee!==s.fees))fail('Recebimentos ou taxas não conferem com o total da venda.');
+    }
+    return s;
   }
   const categories={filament:'Filamento',energy:'Energia',maintenance:'Manutenção',accessories:'Acessórios / ferramentas',packaging:'Embalagem',delivery:'Entrega',other:'Outros'};
   function expense(raw){if(!Object.hasOwn(categories,raw.category))fail('Categoria inválida.');if(typeof raw.cancelled!=='boolean')fail('Situação da despesa inválida.');return {id:text(raw.id,'Identificador'),name:text(raw.name,'Descrição'),category:raw.category,date:date(raw.date,'Data do pagamento'),amount:integer(raw.amount,'Valor da despesa',1),cancelled:raw.cancelled};}
@@ -37,6 +47,7 @@
     if(!raw||raw.version!==1)fail('Controle financeiro incompatível.');
     for(const k of ['sales','expenses','payments'])if(!Array.isArray(raw[k])||raw[k].length>LIMIT)fail('Lista inválida: '+k);
     const out={version:1,printer:raw.printer===null?null:printer(raw.printer),sales:raw.sales.map(sale),expenses:raw.expenses.map(expense),payments:[]};
+    Object.assign(out,O.validate({inventory:raw.inventory===undefined?[]:raw.inventory,runs:raw.runs===undefined?[]:raw.runs},out.sales));
     const plan=schedule(out.printer);
     out.payments=raw.payments.map(p=>{
       const index=integer(p.index,'Parcela',0,119);if(!plan[index])fail('Pagamento sem parcela correspondente.');
@@ -52,12 +63,15 @@
     const received=data.sales.filter(s=>!s.cancelled&&s.receivedDate?.slice(0,7)===selected);
     const expenses=data.expenses.filter(e=>!e.cancelled&&e.date.slice(0,7)===selected);
     const sum=(items,fn)=>items.reduce((total,item)=>total+fn(item),0);
+    const closed=sales.flatMap(s=>{const r=(data.runs||[]).find(r=>!r.cancelled&&r.saleId===s.id);return r?[{sale:s,run:r}]:[];});
+    const productionProfit=sum(closed,({sale,run})=>sale.gross-sale.fees-Math.round(C.calculate(run.actual).total*100));
     const plan=schedule(data.printer),due=plan.filter(p=>p.month===selected);
-    const netReceived=sum(received,s=>s.gross-s.fees),spent=sum(expenses,e=>e.amount);
+    const partial=data.sales.filter(s=>!s.cancelled).flatMap(s=>(s.receipts||[]).filter(p=>p.date.slice(0,7)===selected));
+    const netReceived=sum(received,s=>s.gross-s.fees)+sum(partial,p=>p.amount-p.fee),spent=sum(expenses,e=>e.amount);
     const down=data.printer?.downDate?.slice(0,7)===selected?data.printer.down:0;
     const paid=sum(data.payments.filter(p=>p.date.slice(0,7)===selected),p=>plan[p.index].amount);
     const available=netReceived-spent-down,target=sum(due,p=>p.amount);
-    return {salesCount:sales.length,sold:sum(sales,s=>s.gross),profit:sum(sales,s=>s.gross-s.fees-s.cost),saleCosts:sum(sales,s=>s.cost),saleFees:sum(sales,s=>s.fees),pending:sum(sales.filter(s=>!s.receivedDate||s.receivedDate.slice(0,7)>selected),s=>s.gross-s.fees),netReceived,spent,down,paid,available,target,balance:available-paid,shortfall:Math.max(0,target-available),coverage:target?Math.max(0,Math.min(100,available/target*100)):null,filamentSpent:sum(expenses.filter(e=>e.category==='filament'),e=>e.amount)};
+    return {productionProfit,productionCount:closed.length,salesCount:sales.length,sold:sum(sales,s=>s.gross),profit:sum(sales,s=>s.gross-s.fees-s.cost),saleCosts:sum(sales,s=>s.cost),saleFees:sum(sales,s=>s.fees),pending:sum(data.sales.filter(s=>!s.cancelled&&s.date.slice(0,7)<=selected),s=>s.gross-s.fees-(s.receivedDate&&s.receivedDate.slice(0,7)<=selected?s.gross-s.fees:sum((s.receipts||[]).filter(p=>p.date.slice(0,7)<=selected),p=>p.amount-p.fee))),netReceived,spent,down,paid,available,target,balance:available-paid,shortfall:Math.max(0,target-available),coverage:target?Math.max(0,Math.min(100,available/target*100)):null,filamentSpent:sum(expenses.filter(e=>e.category==='filament'),e=>e.amount)};
   }
   function backup(raw){
     if(!raw||raw.app!=='camada-backup'||raw.version!==1)fail('Este não é um backup completo compatível. Para um orçamento individual, use “Importar orçamento”.');

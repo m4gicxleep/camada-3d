@@ -1,4 +1,32 @@
-# Validação da versão 1.1
+# Validação da versão 1.2
+
+Verificado em 13 de novembro de 2026, a partir do código público do commit `b678823`.
+
+## Testes da atualização
+
+90 testes automatizados aprovados em Node.js 24.11.1: os 64 testes anteriores e 26 cenários novos para perdas adicionais, embalagem por unidade, preço mínimo, reserva de cor, migração de dados, consumo por rolo, bloqueio de estoque insuficiente, edição sem dupla baixa, falhas, desfazer lançamento, congelamento de custos, vínculo de produção e venda, recebimentos parciais, saldo pendente acumulado, taxas de recebimento, cancelamentos, resultado realizado mensal, backup e arquivos fatiados compactados. As verificações de sintaxe de todos os scripts também passaram.
+
+Os testes de `.gcode.3mf` usam arquivos ZIP sintéticos com cabeçalhos no formato Bambu / Orca, armazenamento sem compressão e Deflate, validação CRC, várias mesas, arquivo não fatiado, corrupção, truncamento e limite de tamanho. Não houve impressão real nem importação de um arquivo exportado da futura impressora do usuário. Diferentes versões do fatiador podem usar cabeçalhos não reconhecidos; nesses casos, a importação recusa e mantém a entrada manual.
+
+## Verificação pela interface
+
+- Cadastro de rolo PLA azul de 1.000 g a R$ 100, seleção desse rolo no orçamento e perdas adicionais de 5 g sobre 100 g: custo R$ 10,50.
+- Preço mínimo do pedido de R$ 30 respeitado; venda de R$ 30 com sinal de R$ 10 e posterior saldo de R$ 20 mantém dois recebimentos, quita o pendente e soma R$ 30 ao caixa do mês.
+- Fechamento vinculado à venda com uma tentativa falha, 150 g + 5 g extras e três horas de máquina: saldo de estoque 845 g, custo realizado R$ 15,50 e sobra após taxas de R$ 14,50. O orçamento original continua em R$ 10,50 e o lucro estimado de venda em R$ 19,50; os indicadores são distintos e rotulados.
+- Tentativa de gravar 1.100 g + 5 g em rolo com 1.000 g bloqueada, com mensagem de estoque insuficiente e sem alterar o saldo salvo.
+- Backup copiado pela interface e conferido: uma venda, dois recebimentos, um rolo e uma produção; indicador da última solicitação de backup atualizado. O ciclo de restauração dos dados é coberto pelos testes automatizados; o seletor de arquivo de restauração não foi exercitado nesta revisão.
+- Página recarregada mantendo venda, produção, rolo e vínculos. Layouts de 390 × 844 e 1280 × 900 conferidos sem transbordamento horizontal. Sem erros ou avisos registrados no console.
+- Capturas de tela usam somente dados fictícios de teste. Esses registros vivem no armazenamento da prévia local e não fazem parte do código entregue nem são enviados ao GitHub.
+
+## Limites
+
+O registro realizado ainda usa tarifas e hipóteses do orçamento para custos que não foram medidos, como desgaste e energia por potência. Reservas de falhas e cor são excluídas do realizado para não tratá-las como consumo efetivo. Compra de rolo, custos das peças e caixa permanecem separados. Não houve medição elétrica real, validação de custos de produção numa impressora, auditoria fiscal nem nova revisão do PDF de impressão.
+
+O aviso de backup confirma solicitação de cópia/download, não prova que o arquivo foi guardado. Os dados não sincronizam entre dispositivos. As rotinas de compra e parcelas da impressora já existentes foram preservadas; nenhuma comparação de compra foi adicionada.
+
+---
+
+# Histórico de validação da versão 1.1
 
 Verificado em 22 de outubro de 2026.
 

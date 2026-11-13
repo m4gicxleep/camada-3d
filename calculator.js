@@ -7,12 +7,13 @@
   const defaults = () => ({
     name: 'Suporte de mesa', simulation: true, selling: false, quantity: 1,
     hours: 4, minutes: 0,
-    materials: [{name: 'PLA · exemplo', price: 100, shipping: 0, discount: 0, spool: 1000, grams: 100}],
+    materials: [{name: 'PLA · exemplo', price: 100, shipping: 0, discount: 0, spool: 1000, grams: 100, waste: 0}],
     energyEnabled: true, energyMode: 'power', measuredKwh: 0, watts: 120, tariff: 1,
     machineEnabled: true, printer: 2500, residual: 0, lifetime: 5000, maintenance: 0.10,
     overheadEnabled: false, monthly: 0, monthlyHours: 100,
     laborEnabled: false, prepMinutes: 0, finishMinutes: 0, hourly: 0,
     extra: 0, packaging: 0, delivery: 0, reserve: 10,
+    minimumPrice: 0, colorReserve: 0, packagingPerUnit: false,
     margin: 25, fees: 0, tax: 0, fixedFee: 0
   });
   function number(value) {
@@ -45,8 +46,9 @@
       const read=(key,label,min=0)=>n(key,label,min,1e9,false,m,`materials.${i}.${key}`);
       const price=read('price','Preço do rolo'), shipping=read('shipping','Frete do rolo'), discount=read('discount','Desconto');
       const spool=read('spool','Peso líquido do rolo',0.001), grams=read('grams','Consumo',0.001);
+      const waste=m.waste===undefined?0:read('waste','Perdas adicionais');
       if(discount>price+shipping) errors[`materials.${i}.discount`]='O desconto não pode superar o preço mais o frete.';
-      materials.push({name:String(m.name||`Filamento ${i+1}`).slice(0,100),grams,spool,unit:(price+shipping-discount)/(spool||1),cost:(price+shipping-discount)/(spool||1)*grams});
+      materials.push({name:String(m.name||`Filamento ${i+1}`).slice(0,100),grams,waste,spool,unit:(price+shipping-discount)/(spool||1),cost:(price+shipping-discount)/(spool||1)*(grams+waste)});
     });
     const material=materials.reduce((s,m)=>s+m.cost,0);
     const energyMode=input.energyMode||'power';
@@ -65,7 +67,8 @@
     const printing=material+energy+depreciation+maintenance+overhead;
     const reserve=printing*n('reserve','Reserva para falhas',0,100)/100;
     const extra=n('extra','Insumos extras'), packaging=n('packaging','Embalagem'), delivery=n('delivery','Frete de entrega');
-    const total=printing+reserve+labor+extra+packaging+delivery;
+    const colorReserve=n('colorReserve','Reserva para cor específica');
+    const total=printing+reserve+colorReserve+labor+extra+packaging*(input.packagingPerUnit?quantity:1)+delivery;
     let price=null, profit=null, fees=0, taxes=0, margin=0;
     if(input.selling) {
       margin=n('margin','Margem',0,99.99)/100;
@@ -75,12 +78,12 @@
       else {
         const raw=(total+fixed)/(1-margin-feeRate-taxRate);
         // Round the order price UP to cents to preserve the requested margin.
-        price=Math.ceil((raw-1e-9)*100)/100;
+        price=Math.ceil((Math.max(raw,n('minimumPrice','Preço mínimo do pedido'))-1e-9)*100)/100;
         fees=price*feeRate+fixed; taxes=price*taxRate; profit=price-total-fees-taxes;
       }
     }
     if(Object.keys(errors).length) return {ok:false,errors};
-    return {ok:true,quantity,duration,materials,material,kwh,energy,depreciation,maintenance,overhead,labor,printing,reserve,extra,packaging,delivery,total,unit:total/quantity,price,profit,fees,taxes,margin};
+    return {ok:true,quantity,duration,materials,material,kwh,energy,depreciation,maintenance,overhead,labor,printing,reserve,colorReserve,extra,packaging:packaging*(input.packagingPerUnit?quantity:1),delivery,total,unit:total/quantity,price,profit,fees,taxes,margin};
   }
   function restore(raw) {
     if(!raw || typeof raw!=='object' || Array.isArray(raw)) throw new Error('Formato de orçamento inválido.');
@@ -89,6 +92,7 @@
     const inactive=new Set(Object.entries(groups).filter(([flag])=>raw[flag]===false).flatMap(([,keys])=>keys));
     for(const key of Object.keys(base)) {
       if(key==='materials') continue;
+      if(['minimumPrice','colorReserve','packagingPerUnit'].includes(key)&&raw[key]===undefined) continue;
       if(typeof base[key]==='boolean') {if(typeof raw[key]!=='boolean') throw new Error('Opção ausente ou inválida: '+key); base[key]=raw[key];}
       else if(typeof base[key]==='string') base[key]=String(raw[key]||(key==='energyMode'?'power':'Minha impressão')).slice(0,100);
       else if(key==='measuredKwh'&&raw[key]===undefined) base[key]=0;
@@ -99,6 +103,8 @@
       if(!m || typeof m!=='object') throw new Error('Filamento inválido.');
       const out={name:String(m.name||'Filamento').slice(0,100)};
       for(const key of ['price','shipping','discount','spool','grams']) out[key]=number(m[key]);
+      out.waste=m.waste===undefined?0:number(m.waste);
+      if(typeof m.rollId==='string')out.rollId=m.rollId.slice(0,160);
       return out;
     });
     if(!calculate(base).ok) throw new Error('O arquivo contém valores inválidos. Confira o orçamento original.');

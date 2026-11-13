@@ -102,7 +102,7 @@
       if(file.size>10*1024*1024)throw new Error('Use um backup de até 10 MB.');
       const clean=F.backup(JSON.parse(await file.text()));
       if(!confirm(`Restaurar ${clean.finance.sales.length} venda(s), ${clean.finance.expenses.length} gasto(s) e ${clean.quotes.length} orçamento(s)? Isto substitui todos os dados atuais deste navegador. Faça um backup antes, se precisar.`))return;
-      const entries={[KEY]:JSON.stringify(clean.finance),'camada-v1-history':JSON.stringify(clean.quotes),'camada-v1-filaments':JSON.stringify(clean.filaments),'camada-v1-draft':clean.draft?JSON.stringify(clean.draft):null};
+      const entries={[KEY]:JSON.stringify(clean.finance),'camada-v1-history':JSON.stringify(clean.quotes),'camada-v1-filaments':JSON.stringify(clean.filaments),'camada-v1-draft':clean.draft?JSON.stringify(clean.draft):null,'camada-v1-cost-profile':clean.profile?JSON.stringify(clean.profile):null};
       const prior=Object.fromEntries(Object.keys(entries).map(k=>[k,localStorage.getItem(k)]));
       try{for(const [k,v] of Object.entries(entries))v===null?localStorage.removeItem(k):localStorage.setItem(k,v);}catch(err){for(const [k,v] of Object.entries(prior))try{v===null?localStorage.removeItem(k):localStorage.setItem(k,v);}catch{}throw new Error('Não foi possível restaurar o backup. Confira espaço e permissões do navegador.');}
       data=clean.finance;blocked=false;$('finance-storage-error').hidden=true;CamadaApp.restoreData(clean);fillPrinter();render();window.dispatchEvent(new Event('camada-finance-change'));message('Backup completo restaurado.');

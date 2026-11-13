@@ -1,5 +1,9 @@
 # Camada 3D
 
+## Cálculo mais simples
+
+Novos cálculos incluem uma estimativa editável de R$ 0,10 por hora para energia e reserva de 10% para falhas. Esse valor por hora é uma hipótese inicial, não uma medição específica da A1 ou A1 mini: o gasto depende da tarifa local e da impressão. Em **Custos padrão e detalhes**, você pode usar potência ou kWh medidos e salvar seus custos para os próximos trabalhos. O backup completo inclui esses padrões.
+
 Projeto pessoal de uma calculadora de custos de impressão 3D, para uso próprio e para quem também quiser usar.
 
 **FEITO COM AJUDA DE IA.**

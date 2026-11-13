@@ -79,7 +79,8 @@
     const quotes=raw.quotes.map(q=>{if(typeof q.id!=='string'||!q.id||q.id.length>160||typeof q.date!=='string'||!Number.isFinite(Date.parse(q.date)))fail('Orçamento com identificador ou data inválida.');return {id:q.id,date:q.date,data:C.restore(q.data)};});
     if(new Set(quotes.map(q=>q.id)).size!==quotes.length)fail('Orçamentos duplicados no backup.');
     const filaments=raw.filaments.map(m=>{const q=C.defaults();q.materials=[{...m,grams:1}];return C.restore(q).materials[0];});
-    return {finance:validate(raw.finance),quotes,filaments,draft:raw.draft===null?null:C.restore(raw.draft)};
+    const profile=raw.profile===undefined||raw.profile===null?null:C.restore({...C.defaults(),...raw.profile});
+    return {finance:validate(raw.finance),quotes,filaments,draft:raw.draft===null?null:C.restore(raw.draft),profile};
   }
   return {LIMIT,empty,cents,date,month,localDate,printer,schedule,sale,expense,validate,report,categories,backup};
 });

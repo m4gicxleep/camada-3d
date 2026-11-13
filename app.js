@@ -3,8 +3,10 @@
   const $=id=>document.getElementById(id);
   const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v);
   const fmt=(v,d=2)=>new Intl.NumberFormat('pt-BR',{maximumFractionDigits:d}).format(v);
-  const KEY='camada-v1-draft', HISTORY='camada-v1-history';
-  let state=Camada.empty(), result, history=[], catalog=[], touched=false, pendingGcode=null, toastTimer, storageWarning=false;
+  const KEY='camada-v1-draft', HISTORY='camada-v1-history', PROFILE='camada-v1-cost-profile';
+  const costKeys=['energyEnabled','energyMode','energyHourly','watts','tariff','machineEnabled','printer','residual','lifetime','maintenance','overheadEnabled','monthly','monthlyHours','laborEnabled','prepMinutes','finishMinutes','hourly','reserve','extra','packaging','packagingPerUnit','delivery','colorReserve','selling','margin','fees','tax','fixedFee','minimumPrice'];
+  function newWithProfile(){const blank=Camada.empty();try{const saved=JSON.parse(localStorage.getItem(PROFILE)||'null');if(saved&&typeof saved==='object'){const candidate={...Camada.defaults(),...saved};if(Camada.calculate(candidate).ok)for(const key of costKeys)if(Object.hasOwn(saved,key))blank[key]=candidate[key];}}catch{}return blank;}
+  let state=newWithProfile(), result, history=[], catalog=[], touched=false, pendingGcode=null, toastTimer, storageWarning=false;
   const fields=Object.keys(state).filter(k=>k!=='materials');
   const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,6500);}
@@ -38,7 +40,9 @@
   function update(){
     for(const key of ['energy','machine','labor','overhead']) $(key+'-fields').hidden=!state[key+'Enabled'];
     $('sale-fields').hidden=!state.selling;
-    $('power-input').hidden=state.energyMode==='measured';
+    $('power-input').hidden=state.energyMode!=='power';
+    $('hourly-input').hidden=state.energyMode!=='hourly';
+    $('tariff-input').hidden=state.energyMode==='hourly';
     $('measured-input').hidden=state.energyMode!=='measured';
     $('simulation-help').hidden=!state.simulation;
     $('simulation-note').querySelector('strong').textContent=state.simulation?'Você está explorando uma simulação.':'Você está usando seus próprios dados.';
@@ -80,6 +84,7 @@
     }
     persist(KEY,state);
   }
+  $('save-cost-profile').addEventListener('click',()=>{const profile=Object.fromEntries(costKeys.map(key=>[key,state[key]]));if(!Camada.calculate({...Camada.defaults(),...profile}).ok){toast('Confira os campos de custos antes de salvar.');return;}if(persist(PROFILE,profile))toast('Custos padrão salvos. Novos cálculos usarão esses valores.');});
   $('quote-form').addEventListener('submit',e=>e.preventDefault());
   document.addEventListener('input',e=>{
     const el=e.target;
@@ -96,7 +101,7 @@
   $('materials').addEventListener('change',e=>{if(e.target.dataset.catalog===undefined||e.target.value==='')return;const i=Number(e.target.dataset.catalog),m=catalog[Number(e.target.value)];state.materials[i]={...m,waste:state.materials[i].waste||0,grams:state.materials[i].grams};delete state.materials[i].rollId;renderMaterials();update();toast('Filamento carregado. Confira o consumo deste trabalho.');});
   $('add-material').addEventListener('click',()=>{if(state.materials.length>=20)return;state.materials.push({name:'Novo filamento',price:0,shipping:0,discount:0,spool:1000,grams:1});renderMaterials();update();$(`material-${state.materials.length-1}-name`).focus();toast('Novo filamento adicionado. Informe o preço e o consumo reais.');});
   $('reset').addEventListener('click',()=>{if(!confirm('Carregar os dados de exemplo? O rascunho atual será substituído. Orçamentos salvos não serão alterados.'))return;state=Camada.defaults();pendingGcode=null;$('gcode-preview').hidden=true;fill();toast('Exemplo carregado. Todos os valores são apenas uma simulação.');});
-  $('new').addEventListener('click',()=>{if(!confirm('Começar um cálculo vazio? O rascunho atual será substituído. Cálculos e filamentos salvos serão mantidos.'))return;state=Camada.empty();touched=false;try{localStorage.removeItem(KEY);}catch{}fill();$('name').focus();});
+  $('new').addEventListener('click',()=>{if(!confirm('Começar um cálculo vazio? O rascunho atual será substituído. Cálculos e filamentos salvos serão mantidos.'))return;state=newWithProfile();touched=false;try{localStorage.removeItem(KEY);}catch{}fill();$('name').focus();});
   function renderHistory(){
     $('history-list').innerHTML=history.length?history.map((item,i)=>{const r=Camada.calculate(item.data);const date=new Date(item.date);return `<article class="history-item"><div><h3>${escape(item.data.name||'Minha impressão')}</h3><p>${Number.isNaN(date.getTime())?'Data desconhecida':date.toLocaleDateString('pt-BR')} · ${item.data.simulation?'Simulação':'Seus dados'} · ${r.quantity} peça(s) · Custo ${money(r.total)}</p></div><div class="history-buttons"><button class="button small" data-open="${i}" type="button">Abrir</button><button class="button subtle small" data-delete="${i}" type="button" aria-label="Excluir ${escape(item.data.name)}">Excluir</button></div></article>`;}).join(''):'<div class="empty-state">Nenhum cálculo salvo. Use “Salvar orçamento” para guardar o atual.</div>';
   }
@@ -169,10 +174,10 @@
     getMaterials:()=>state.materials.map(m=>({...m})),
     unlinkRoll:index=>{delete state.materials[index].rollId;renderMaterials();update();},
     useRoll:(index,roll)=>{const old=state.materials[index];state.materials[index]={name:roll.name+' · '+roll.color,price:roll.price,shipping:roll.shipping,discount:roll.discount,spool:roll.spool,grams:old.grams,waste:old.waste||0,rollId:roll.id};fill();},
-    exportData:()=>({quotes:JSON.parse(JSON.stringify(history)),filaments:JSON.parse(JSON.stringify(catalog)),draft:result.ok?Camada.restore(state):null}),
+    exportData:()=>({quotes:JSON.parse(JSON.stringify(history)),filaments:JSON.parse(JSON.stringify(catalog)),draft:result.ok?Camada.restore(state):null,profile:(()=>{try{return JSON.parse(localStorage.getItem(PROFILE)||'null');}catch{return null;}})()}),
     loadQuote:data=>{state=Camada.restore(data);fill();},
     usePrinter:value=>{state.printer=value;state.machineEnabled=true;fill();$('advanced-costs').open=true;toast('Valor da impressora aplicado. Confira vida útil e manutenção: ainda são as hipóteses do cálculo.');},
-    restoreData:data=>{history=data.quotes;catalog=data.filaments;state=data.draft||Camada.empty();fill();renderHistory();}
+    restoreData:data=>{history=data.quotes;catalog=data.filaments;state=data.draft||newWithProfile();fill();renderHistory();}
   };
   fill();renderHistory();
 })();
